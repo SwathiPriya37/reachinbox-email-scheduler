@@ -1,0 +1,13 @@
+{
+  "name": "reachinbox-scripts",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "seed": "ts-node seed-emails.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.3"
+  }
+}

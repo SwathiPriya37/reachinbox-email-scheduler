@@ -1,0 +1,1 @@
+{"version":3,"file":"emailQueue.d.ts","sourceRoot":"","sources":["../../src/queue/emailQueue.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,KAAK,EAAgB,MAAM,QAAQ,CAAC;AAE7C,OAAO,KAAK,EAAE,YAAY,EAAE,MAAM,UAAU,CAAC;AAE7C,eAAO,MAAM,gBAAgB,gBAAgB,CAAC;AAI9C,wBAAgB,SAAS,CAAC,OAAO,EAAE,MAAM,GAAG,MAAM,CAEjD;AAuBD,wBAAgB,aAAa,IAAI,KAAK,CAAC,YAAY,CAAC,CASnD"}
