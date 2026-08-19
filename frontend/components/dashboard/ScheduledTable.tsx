@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { LoadingSkeleton } from '@/components/ui/LoadingSkeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import type { EmailRow } from '@/lib/types';
@@ -23,6 +24,66 @@ function formatScheduledTime(iso: string) {
     hour12: true,
   });
   return `${weekday} ${month} ${day}, ${time}`;
+}
+
+/** Returns a live "X d Y h Z m" countdown string, updates every minute */
+function useCountdown(iso: string) {
+  const [label, setLabel] = useState('');
+  useEffect(() => {
+    const compute = () => {
+      const diff = new Date(iso).getTime() - Date.now();
+      if (diff <= 0) {
+        setLabel('Sending…');
+        return;
+      }
+      const totalMin = Math.ceil(diff / 60000);
+      const days = Math.floor(totalMin / 1440);
+      const hours = Math.floor((totalMin % 1440) / 60);
+      const mins = totalMin % 60;
+      if (days > 0) setLabel(`${days}d ${hours}h`);
+      else if (hours > 0) setLabel(`${hours}h ${mins}m`);
+      else setLabel(`${mins}m`);
+    };
+    compute();
+    const id = setInterval(compute, 30_000); // refresh every 30s
+    return () => clearInterval(id);
+  }, [iso]);
+  return label;
+}
+
+function CountdownBadge({ scheduledTime }: { scheduledTime: string }) {
+  const label = useCountdown(scheduledTime);
+  const msLeft = new Date(scheduledTime).getTime() - Date.now();
+  const sendingSoon = msLeft > 0 && msLeft < 5 * 60 * 1000; // < 5 min
+
+  if (msLeft <= 0) {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-medium text-emerald-700 bg-emerald-50 rounded-full border border-emerald-100">
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+        Sending…
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-medium rounded-full border ${
+        sendingSoon
+          ? 'text-red-600 bg-red-50 border-red-100'
+          : 'text-orange-600 bg-orange-50 border-orange-100'
+      }`}
+    >
+      {sendingSoon ? (
+        <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-ping" />
+      ) : (
+        <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      )}
+      {formatScheduledTime(scheduledTime)}
+      <span className="text-[10px] opacity-70 font-normal ml-0.5">in {label}</span>
+    </span>
+  );
 }
 
 const CalendarIcon = () => (
@@ -89,14 +150,9 @@ export function ScheduledTable({ emails, isLoading, error, onCompose, onRowClick
                 <span className="font-medium text-gray-800 text-sm">To: {row.recipient}</span>
               </td>
 
-              {/* Scheduled time badge */}
-              <td className="py-3 px-3 w-52 flex-shrink-0 whitespace-nowrap">
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-medium text-orange-600 bg-orange-50 rounded-full border border-orange-100">
-                  <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  {formatScheduledTime(row.scheduledTime)}
-                </span>
+              {/* Live countdown badge */}
+              <td className="py-3 px-3 w-72 flex-shrink-0 whitespace-nowrap">
+                <CountdownBadge scheduledTime={row.scheduledTime} />
               </td>
 
               {/* Subject · preview */}

@@ -12,6 +12,18 @@ interface SentTableProps {
   onRowClick?: (email: EmailRow) => void;
 }
 
+/** Returns "X minutes/hours/days ago" */
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
+
 const SentIcon = () => (
   <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.2}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
@@ -76,10 +88,11 @@ export function SentTable({ emails, isLoading, error, onCompose, onRowClick }: S
                 <span className="font-medium text-gray-800 text-sm">To: {row.recipient}</span>
               </td>
 
-              {/* "Sent" label badge — plain gray text label matching screenshot */}
-              <td className="py-3 px-3 w-20 flex-shrink-0">
-                <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium text-gray-500 bg-gray-100 rounded">
-                  Sent
+              {/* Sent badge with relative time */}
+              <td className="py-3 px-3 w-36 flex-shrink-0 whitespace-nowrap">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-medium text-emerald-700 bg-emerald-50 rounded-full border border-emerald-100">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                  Sent · {row.sentTime ? timeAgo(row.sentTime) : '—'}
                 </span>
               </td>
 

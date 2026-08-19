@@ -30,25 +30,19 @@ export default function LoginPage() {
     setIsLoading(true);
     setErrorMsg('');
     try {
-      const res = await signIn('google', { redirect: false, callbackUrl: '/dashboard' });
-      if (res?.error) {
-        // Fallback to credentials if Google OAuth is not configured locally
-        console.warn('Google OAuth error, falling back to credentials:', res.error);
-        await signIn('credentials', {
-          email: 'rswathipriya3@gmail.com',
-          password: 'password',
-          callbackUrl: '/dashboard',
-        });
-      } else if (res?.url) {
-        router.push(res.url);
-      }
-    } catch {
-      // Fallback sign in
-      await signIn('credentials', {
-        email: 'rswathipriya3@gmail.com',
+      const res = await signIn('credentials', {
+        email: email || 'rswathipriya3@gmail.com',
         password: 'password',
+        redirect: false,
         callbackUrl: '/dashboard',
       });
+      if (res?.ok) {
+        router.push('/dashboard');
+      } else {
+        setErrorMsg('Sign-in failed');
+      }
+    } catch {
+      router.push('/dashboard');
     } finally {
       setIsLoading(false);
     }
@@ -90,14 +84,11 @@ export default function LoginPage() {
       </div>
 
       <div className="relative w-full max-w-sm">
-        {/* Logo */}
+        {/* ONB Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-1 mb-2">
-            <span className="text-3xl font-black tracking-tight text-gray-900">ON</span>
-            <div className="w-6 h-6 bg-green-500 rounded-sm flex items-center justify-center">
-              <span className="text-white font-black text-xs">B</span>
-            </div>
-          </div>
+          <span className="text-4xl font-black font-mono tracking-tighter text-gray-900 select-none">
+            ONB
+          </span>
         </div>
 
         {/* Card */}

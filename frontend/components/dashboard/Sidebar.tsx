@@ -1,7 +1,6 @@
 'use client';
 
 import { useSession } from 'next-auth/react';
-import Image from 'next/image';
 import { Button } from '@/components/ui/Button';
 import { Tabs } from '@/components/ui/Tabs';
 
@@ -11,6 +10,23 @@ interface SidebarProps {
   scheduledCount: number;
   sentCount: number;
   onCompose: () => void;
+}
+
+function nameToHue(name: string): number {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return Math.abs(hash) % 360;
+}
+
+function getInitials(name: string): string {
+  return name
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
 }
 
 const ScheduledIcon = () => (
@@ -34,30 +50,29 @@ export function Sidebar({
 }: SidebarProps) {
   const { data: session } = useSession();
   const user = session?.user;
+  const name = user?.name ?? 'User';
+  const initials = getInitials(name);
+  const hue = nameToHue(name);
+  const avatarStyle = {
+    background: `linear-gradient(135deg, hsl(${hue},65%,52%), hsl(${(hue + 40) % 360},70%,44%))`,
+  };
 
   return (
     <aside className="w-56 bg-white border-r border-gray-100 flex flex-col py-4 px-3 flex-shrink-0">
-      {/* User info */}
+      {/* User info — initials only */}
       {user && (
         <div className="mb-4 px-1">
           <div className="flex items-center gap-2">
-            {user.image ? (
-              <Image
-                src={user.image}
-                alt={user.name ?? 'User'}
-                width={28}
-                height={28}
-                unoptimized
-                className="rounded-full ring-1 ring-gray-200 flex-shrink-0"
-              />
-            ) : (
-              <div className="w-7 h-7 rounded-full bg-brand-500 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
-                {user.name?.[0]?.toUpperCase() ?? 'U'}
-              </div>
-            )}
+            <div
+              className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold select-none shadow-sm flex-shrink-0"
+              style={avatarStyle}
+              title={name}
+            >
+              {initials}
+            </div>
             <div className="min-w-0">
               <p className="text-sm font-semibold text-gray-800 truncate leading-tight">
-                {user.name}
+                {name}
               </p>
               <p className="text-xs text-gray-400 truncate leading-tight">
                 {user.email}
@@ -75,7 +90,7 @@ export function Sidebar({
         size="sm"
         className="w-full mb-5 border-brand-500 text-brand-600 hover:bg-brand-50 font-semibold"
       >
-        Compose
+        + Compose
       </Button>
 
       {/* Navigation */}

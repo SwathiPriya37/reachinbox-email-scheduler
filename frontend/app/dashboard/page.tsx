@@ -2,7 +2,7 @@
 
 import { useSession } from 'next-auth/react';
 import { redirect } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Header } from '@/components/dashboard/Header';
 import { Sidebar } from '@/components/dashboard/Sidebar';
 import { ScheduledTable } from '@/components/dashboard/ScheduledTable';
@@ -13,11 +13,21 @@ import { useEmails } from '@/hooks/useEmails';
 import type { EmailRow } from '@/lib/types';
 
 export default function DashboardPage() {
+  // 1. Session hook
   const { data: session, status } = useSession();
+
+  // 2. State hooks
   const [activeTab, setActiveTab] = useState<'scheduled' | 'sent'>('scheduled');
   const [composeOpen, setComposeOpen] = useState(false);
   const [selectedEmail, setSelectedEmail] = useState<EmailRow | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
+  // 3. Toast notification hooks
+  const [toastMsg, setToastMsg] = useState('');
+  const [toastVisible, setToastVisible] = useState(false);
+  const prevSentCount = useRef<number | null>(null);
+
+  // 4. Email data hook
   const {
     scheduledEmails,
     sentEmails,
@@ -28,9 +38,56 @@ export default function DashboardPage() {
     scheduledError,
     sentError,
     refresh,
-  } = useEmails(15_000);
+  } = useEmails(10_000);
 
-  // Auth guard
+  // 5. Toast trigger effect
+  useEffect(() => {
+    if (prevSentCount.current === null) {
+      prevSentCount.current = sentTotal;
+      return;
+    }
+    if (sentTotal > prevSentCount.current) {
+      const delta = sentTotal - prevSentCount.current;
+      setToastMsg(`✓ ${delta} email${delta > 1 ? 's' : ''} delivered successfully`);
+      setToastVisible(true);
+      const t = setTimeout(() => setToastVisible(false), 4000);
+      prevSentCount.current = sentTotal;
+      return () => clearTimeout(t);
+    }
+    prevSentCount.current = sentTotal;
+  }, [sentTotal]);
+
+  // 6. Memoized search filters (ALL HOOKS CALLED BEFORE ANY CONDITIONAL RETURN)
+  const filteredScheduled = useMemo(() => {
+    if (!searchQuery.trim()) return scheduledEmails;
+    const q = searchQuery.toLowerCase();
+    return scheduledEmails.filter(
+      (e) =>
+        e.subject.toLowerCase().includes(q) ||
+        e.recipient.toLowerCase().includes(q) ||
+        e.body.toLowerCase().includes(q),
+    );
+  }, [scheduledEmails, searchQuery]);
+
+  const filteredSent = useMemo(() => {
+    if (!searchQuery.trim()) return sentEmails;
+    const q = searchQuery.toLowerCase();
+    return sentEmails.filter(
+      (e) =>
+        e.subject.toLowerCase().includes(q) ||
+        e.recipient.toLowerCase().includes(q) ||
+        e.body.toLowerCase().includes(q),
+    );
+  }, [sentEmails, searchQuery]);
+
+  // 7. Redirect unauthenticated users in an effect
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      redirect('/login');
+    }
+  }, [status]);
+
+  // Loading state render (must be AFTER all hooks)
   if (status === 'loading') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -40,8 +97,11 @@ export default function DashboardPage() {
   }
 
   if (status === 'unauthenticated') {
-    redirect('/login');
+    return null;
   }
+
+  const activeFiltered = activeTab === 'scheduled' ? filteredScheduled : filteredSent;
+  const showSearchCount = searchQuery.trim() && activeFiltered.length !== (activeTab === 'scheduled' ? scheduledEmails : sentEmails).length;
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
@@ -71,11 +131,30 @@ export default function DashboardPage() {
                 </svg>
                 <input
                   type="text"
-                  placeholder="Search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search by recipient, subject, or body…"
                   id="email-search"
                   className="flex-1 bg-transparent text-sm text-gray-700 placeholder-gray-400 outline-none"
                 />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
+                    title="Clear search"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
               </div>
+              {/* Search result count chip */}
+              {showSearchCount && (
+                <span className="text-xs text-gray-400 whitespace-nowrap">
+                  {activeFiltered.length} result{activeFiltered.length !== 1 ? 's' : ''}
+                </span>
+              )}
             </div>
 
             {/* Actions */}
@@ -109,7 +188,7 @@ export default function DashboardPage() {
           <div className="flex-1 overflow-y-auto">
             {activeTab === 'scheduled' ? (
               <ScheduledTable
-                emails={scheduledEmails}
+                emails={filteredScheduled}
                 isLoading={scheduledLoading}
                 error={scheduledError}
                 onCompose={() => setComposeOpen(true)}
@@ -117,7 +196,7 @@ export default function DashboardPage() {
               />
             ) : (
               <SentTable
-                emails={sentEmails}
+                emails={filteredSent}
                 isLoading={sentLoading}
                 error={sentError}
                 onCompose={() => setComposeOpen(true)}
@@ -133,7 +212,7 @@ export default function DashboardPage() {
         isOpen={composeOpen}
         onClose={() => setComposeOpen(false)}
         onSuccess={() => {
-          setTimeout(refresh, 500); // brief delay for DB to settle
+          setTimeout(refresh, 500);
         }}
       />
 
@@ -142,6 +221,18 @@ export default function DashboardPage() {
         email={selectedEmail}
         onClose={() => setSelectedEmail(null)}
       />
+
+      {/* Delivery toast notification */}
+      <div
+        className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] transition-all duration-500 ${
+          toastVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'
+        }`}
+      >
+        <div className="flex items-center gap-2.5 bg-gray-900 text-white text-sm font-medium px-4 py-2.5 rounded-full shadow-xl">
+          <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+          {toastMsg}
+        </div>
+      </div>
     </div>
   );
 }

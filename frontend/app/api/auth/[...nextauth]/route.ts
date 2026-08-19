@@ -1,10 +1,10 @@
-import NextAuth from 'next-auth';
+import NextAuth, { NextAuthOptions } from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 import CredentialsProvider from 'next-auth/providers/credentials';
 
 const providers = [];
 
-// Only enable GoogleProvider if actual Google Client ID is configured
+// Only enable GoogleProvider if real Google Client ID is configured
 if (
   process.env.GOOGLE_CLIENT_ID &&
   process.env.GOOGLE_CLIENT_ID !== 'your_google_client_id_here' &&
@@ -19,7 +19,7 @@ if (
   );
 }
 
-// CredentialsProvider allows login via Email/Password or Demo Login
+// CredentialsProvider allows instant login via Email or Demo Login
 providers.push(
   CredentialsProvider({
     id: 'credentials',
@@ -30,7 +30,6 @@ providers.push(
     },
     async authorize(credentials) {
       const email = credentials?.email?.trim() || 'rswathipriya3@gmail.com';
-      // Format a clean display name from email (e.g. reachinbox -> ReachInbox)
       const namePart = email.split('@')[0] || 'ReachInbox';
       const name = namePart
         .split(/[._-]/)
@@ -41,17 +40,16 @@ providers.push(
         id: 'user-1',
         name: name || 'ReachInbox',
         email: email,
-        image:
-          'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&crop=faces',
       };
     },
   }),
 );
 
-const handler = NextAuth({
+export const authOptions: NextAuthOptions = {
   providers,
   pages: {
     signIn: '/login',
+    error: '/login', // Redirect errors back to /login instead of internal 500 page
   },
   session: {
     strategy: 'jwt',
@@ -73,6 +71,8 @@ const handler = NextAuth({
   secret:
     process.env.NEXTAUTH_SECRET ||
     'reachinbox_default_secret_32_chars_minimum_length_for_jwt',
-});
+};
+
+const handler = NextAuth(authOptions);
 
 export { handler as GET, handler as POST };

@@ -1,45 +1,50 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../db';
 import { getRedis } from '../redis';
-import { getEmailQueue } from '../queue/emailQueue';
 
 const router = Router();
 
 router.get('/health', async (_req: Request, res: Response) => {
-  const checks: Record<string, 'ok' | 'offline'> = {};
+  let database = false;
+  let redis = false;
 
   // Check PostgreSQL
   try {
     await db.$queryRaw`SELECT 1`;
-    checks.postgres = 'ok';
+    database = true;
   } catch {
-    checks.postgres = 'offline';
+    database = false;
   }
 
   // Check Redis
   try {
-    const redis = getRedis();
-    await redis.ping();
-    checks.redis = 'ok';
+    const r = getRedis();
+    await r.ping();
+    redis = true;
   } catch {
-    checks.redis = 'offline';
+    redis = false;
   }
 
-  // Check BullMQ queue
-  try {
-    const queue = getEmailQueue();
-    await queue.getJobCounts();
-    checks.bullmq = 'ok';
-  } catch {
-    checks.bullmq = 'offline';
+  // Check BullMQ queue (only if redis is up)
+  let queue = false;
+  if (redis) {
+    try {
+      // Dynamically import to avoid circular init issues
+      const { getEmailQueue } = await import('../queue/emailQueue');
+      await getEmailQueue().getJobCounts();
+      queue = true;
+    } catch {
+      queue = false;
+    }
   }
 
-  const allOk = Object.values(checks).every((v) => v === 'ok');
+  const allOk = database && redis && queue;
 
   return res.status(200).json({
-    status: allOk ? 'healthy' : 'dev-standby',
-    checks,
+    status: allOk ? 'healthy' : 'degraded',
     timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    services: { database, redis, queue },
   });
 });
 

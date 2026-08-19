@@ -1,25 +1,74 @@
 'use client';
 
 import { signOut, useSession } from 'next-auth/react';
-import Image from 'next/image';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+
+/** Deterministic gradient hue derived from name — same name always gets same color */
+function nameToHue(name: string): number {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return Math.abs(hash) % 360;
+}
+
+function getInitials(name: string): string {
+  return name
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+}
+
+function useLiveClock() {
+  const [time, setTime] = useState('');
+  useEffect(() => {
+    const tick = () => {
+      setTime(
+        new Date().toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: true,
+        }),
+      );
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
+  return time;
+}
 
 export function Header() {
   const { data: session } = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
+  const time = useLiveClock();
 
   if (!session?.user) return null;
 
   const user = session.user;
+  const name = user.name ?? 'User';
+  const initials = getInitials(name);
+  const hue = nameToHue(name);
+  const avatarStyle = {
+    background: `linear-gradient(135deg, hsl(${hue},65%,52%), hsl(${(hue + 40) % 360},70%,44%))`,
+  };
 
   return (
     <header className="h-14 border-b border-gray-100 bg-white flex items-center justify-between px-6 flex-shrink-0">
-      {/* Logo */}
-      <div className="flex items-center gap-1">
-        <span className="text-xl font-black tracking-tight text-gray-900">ON</span>
-        <div className="w-5 h-5 bg-green-500 rounded-sm flex items-center justify-center">
-          <span className="text-white font-black text-[10px]">B</span>
-        </div>
+      {/* ONB Logo */}
+      <div className="flex items-center">
+        <span className="text-2xl font-black font-mono tracking-tighter text-gray-900 select-none">
+          ONB
+        </span>
+      </div>
+
+      {/* Centre — live clock pill */}
+      <div className="hidden md:flex items-center gap-1.5 text-xs font-mono text-gray-400 bg-gray-50 px-3 py-1 rounded-full border border-gray-100">
+        <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse inline-block" />
+        {time}
       </div>
 
       {/* User menu */}
@@ -31,22 +80,17 @@ export function Header() {
           aria-haspopup="true"
           aria-expanded={menuOpen}
         >
-          {user.image ? (
-            <Image
-              src={user.image}
-              alt={user.name ?? 'User'}
-              width={28}
-              height={28}
-              unoptimized
-              className="rounded-full ring-1 ring-gray-200"
-            />
-          ) : (
-            <div className="w-7 h-7 rounded-full bg-brand-500 flex items-center justify-center text-white text-xs font-semibold">
-              {user.name?.[0]?.toUpperCase() ?? 'U'}
-            </div>
-          )}
+          {/* Initials avatar — always shown, no profile photo */}
+          <div
+            className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold select-none shadow-sm"
+            style={avatarStyle}
+            title={name}
+          >
+            {initials}
+          </div>
+
           <div className="hidden sm:block text-left">
-            <p className="text-xs font-semibold text-gray-800 leading-tight">{user.name}</p>
+            <p className="text-xs font-semibold text-gray-800 leading-tight">{name}</p>
             <p className="text-[11px] text-gray-400 leading-tight">{user.email}</p>
           </div>
           <svg className="w-3.5 h-3.5 text-gray-400 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -55,10 +99,18 @@ export function Header() {
         </button>
 
         {menuOpen && (
-          <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50 animate-slide-up">
-            <div className="px-3 py-2 border-b border-gray-50">
-              <p className="text-xs font-semibold text-gray-800 truncate">{user.name}</p>
-              <p className="text-[11px] text-gray-400 truncate">{user.email}</p>
+          <div className="absolute right-0 top-full mt-1 w-52 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50 animate-slide-up">
+            <div className="px-3 py-2.5 border-b border-gray-50 flex items-center gap-2.5">
+              <div
+                className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 shadow-sm"
+                style={avatarStyle}
+              >
+                {initials}
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-gray-800 truncate">{name}</p>
+                <p className="text-[11px] text-gray-400 truncate">{user.email}</p>
+              </div>
             </div>
             <button
               onClick={() => signOut({ callbackUrl: '/login' })}
@@ -74,12 +126,8 @@ export function Header() {
         )}
       </div>
 
-      {/* Close menu on outside click */}
       {menuOpen && (
-        <div
-          className="fixed inset-0 z-40"
-          onClick={() => setMenuOpen(false)}
-        />
+        <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
       )}
     </header>
   );
