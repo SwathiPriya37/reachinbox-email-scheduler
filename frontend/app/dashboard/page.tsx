@@ -8,12 +8,15 @@ import { Sidebar } from '@/components/dashboard/Sidebar';
 import { ScheduledTable } from '@/components/dashboard/ScheduledTable';
 import { SentTable } from '@/components/dashboard/SentTable';
 import { ComposeModal } from '@/components/dashboard/ComposeModal';
+import { EmailDetailPanel } from '@/components/dashboard/EmailDetailPanel';
 import { useEmails } from '@/hooks/useEmails';
+import type { EmailRow } from '@/lib/types';
 
 export default function DashboardPage() {
   const { data: session, status } = useSession();
   const [activeTab, setActiveTab] = useState<'scheduled' | 'sent'>('scheduled');
   const [composeOpen, setComposeOpen] = useState(false);
+  const [selectedEmail, setSelectedEmail] = useState<EmailRow | null>(null);
 
   const {
     scheduledEmails,
@@ -110,6 +113,7 @@ export default function DashboardPage() {
                 isLoading={scheduledLoading}
                 error={scheduledError}
                 onCompose={() => setComposeOpen(true)}
+                onRowClick={(email) => setSelectedEmail(email)}
               />
             ) : (
               <SentTable
@@ -117,6 +121,7 @@ export default function DashboardPage() {
                 isLoading={sentLoading}
                 error={sentError}
                 onCompose={() => setComposeOpen(true)}
+                onRowClick={(email) => setSelectedEmail(email)}
               />
             )}
           </div>
@@ -130,6 +135,12 @@ export default function DashboardPage() {
         onSuccess={() => {
           setTimeout(refresh, 500); // brief delay for DB to settle
         }}
+      />
+
+      {/* Email detail panel */}
+      <EmailDetailPanel
+        email={selectedEmail}
+        onClose={() => setSelectedEmail(null)}
       />
     </div>
   );

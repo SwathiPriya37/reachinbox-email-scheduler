@@ -7,32 +7,27 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('[Seed] Starting database seed...');
 
-  // Check if a sender already exists
-  const existing = await prisma.sender.findFirst();
-  if (existing) {
-    console.log(`[Seed] Sender already exists: ${existing.email} — skipping`);
-    return;
-  }
+  // Clear existing senders to apply the new SendGrid ones
+  await prisma.sender.deleteMany({});
+  console.log('[Seed] Cleared existing senders.');
 
-  console.log('[Seed] Creating Ethereal test account...');
-  const ethereal = await createEtherealAccount();
-
+  console.log('[Seed] Creating SendGrid sender account...');
+  
   const sender = await prisma.sender.create({
     data: {
-      name: 'ReachInbox Mailer',
-      email: ethereal.email,
-      smtpHost: ethereal.smtpHost,
-      smtpPort: ethereal.smtpPort,
-      smtpUser: ethereal.smtpUser,
-      smtpPass: ethereal.smtpPass,
-      smtpSecure: ethereal.smtpSecure,
+      name: 'ReachInbox',
+      email: 'rswathipriya3@gmail.com', // Your verified SendGrid email
+      smtpHost: 'smtp.sendgrid.net',
+      smtpPort: 587,
+      smtpUser: 'apikey',
+      smtpPass: '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',
+      smtpSecure: false,
       hourlyLimit: 100,
     },
   });
 
-  console.log(`[Seed] ✓ Created sender: ${sender.email}`);
+  console.log(`[Seed] ✓ Created SendGrid sender: ${sender.email}`);
   console.log(`[Seed] Sender ID: ${sender.id}`);
-  console.log('[Seed] View sent emails at: https://ethereal.email');
   console.log('[Seed] Done');
 }
 

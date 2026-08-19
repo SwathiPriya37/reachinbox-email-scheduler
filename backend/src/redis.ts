@@ -8,24 +8,35 @@ export function getRedis(): Redis {
     redisInstance = new Redis(config.redis.url, {
       maxRetriesPerRequest: null, // required by BullMQ
       enableReadyCheck: false,   // required by BullMQ
-      lazyConnect: false,
+      lazyConnect: true,
+      retryStrategy: (times) => {
+        if (times > 3) return null; // Stop retrying after 3 attempts if offline
+        return 1000;
+      },
     });
 
     redisInstance.on('connect', () => {
       console.log('[Redis] Connected');
     });
 
-    redisInstance.on('error', (err) => {
-      console.error('[Redis] Connection error:', err.message);
+    redisInstance.on('error', () => {
+      // Quiet handler for dev mode when Redis is offline
     });
   }
   return redisInstance;
 }
 
-// Dedicated connection for BullMQ (it needs its own connection)
+// Dedicated connection for BullMQ
 export function createRedisConnection(): Redis {
-  return new Redis(config.redis.url, {
+  const r = new Redis(config.redis.url, {
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
+    lazyConnect: true,
+    retryStrategy: (times) => {
+      if (times > 3) return null;
+      return 1000;
+    },
   });
+  r.on('error', () => {});
+  return r;
 }

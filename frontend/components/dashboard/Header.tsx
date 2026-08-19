@@ -37,6 +37,7 @@ export function Header() {
               alt={user.name ?? 'User'}
               width={28}
               height={28}
+              unoptimized
               className="rounded-full ring-1 ring-gray-200"
             />
           ) : (

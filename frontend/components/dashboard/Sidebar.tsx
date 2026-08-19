@@ -36,7 +36,7 @@ export function Sidebar({
   const user = session?.user;
 
   return (
-    <aside className="w-36 bg-white border-r border-gray-100 flex flex-col py-4 px-3 flex-shrink-0">
+    <aside className="w-56 bg-white border-r border-gray-100 flex flex-col py-4 px-3 flex-shrink-0">
       {/* User info */}
       {user && (
         <div className="mb-4 px-1">
@@ -47,6 +47,7 @@ export function Sidebar({
                 alt={user.name ?? 'User'}
                 width={28}
                 height={28}
+                unoptimized
                 className="rounded-full ring-1 ring-gray-200 flex-shrink-0"
               />
             ) : (
@@ -55,11 +56,11 @@ export function Sidebar({
               </div>
             )}
             <div className="min-w-0">
-              <p className="text-xs font-semibold text-gray-800 truncate leading-tight">
-                {user.name?.split(' ')[0]}
+              <p className="text-sm font-semibold text-gray-800 truncate leading-tight">
+                {user.name}
               </p>
-              <p className="text-[10px] text-gray-400 truncate leading-tight">
-                {user.email?.split('@')[1]}
+              <p className="text-xs text-gray-400 truncate leading-tight">
+                {user.email}
               </p>
             </div>
           </div>

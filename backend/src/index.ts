@@ -16,12 +16,21 @@ import healthRoutes from './routes/healthRoutes';
 
 const app = express();
 
-// ── Middleware ─────────────────────────────────────────────────────────────────
-app.use(helmet());
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error('Connection timeout')), timeoutMs),
+    ),
+  ]);
+}
+
+// ── CORS & Security Middleware ───────────────────────────────────────────────
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(compression());
 app.use(
   cors({
-    origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
+    origin: true, // Allow all origins in dev mode for easy local testing
     credentials: true,
   }),
 );
@@ -29,90 +38,84 @@ app.use(express.json({ limit: '10mb' })); // 10MB for large CSV batches
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan(config.nodeEnv === 'development' ? 'dev' : 'combined'));
 
-// ── Routes ─────────────────────────────────────────────────────────────────────
+// ── Routes ───────────────────────────────────────────────────────────────────
 app.use('/api/emails', emailRoutes);
 app.use('/api', healthRoutes);
 
-// ── 404 handler ────────────────────────────────────────────────────────────────
+// ── 404 handler ──────────────────────────────────────────────────────────────
 app.use((_req: Request, res: Response) => {
   res.status(404).json({ success: false, error: 'Route not found' });
 });
 
-// ── Global error handler ───────────────────────────────────────────────────────
+// ── Global error handler ─────────────────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   console.error('[Error]', err.message);
-  if (config.nodeEnv === 'development') {
-    console.error(err.stack);
-  }
   res.status(500).json({
     success: false,
     error: 'Internal server error',
-    // Never leak stack traces in production
     ...(config.nodeEnv === 'development' ? { details: err.message } : {}),
   });
 });
 
-// ── Boot sequence ─────────────────────────────────────────────────────────────
+// ── Boot sequence ────────────────────────────────────────────────────────────
 async function boot() {
-  console.log('[Boot] Starting ReachInbox Email Scheduler backend...');
+  console.log('======================================================');
+  console.log('   ReachInbox Email Scheduler Backend Service');
+  console.log('======================================================');
 
-  // 1. Verify DB connection
+  let dbConnected = false;
+  let redisConnected = false;
+
+  // 1. Check PostgreSQL (with 500ms fast timeout)
   try {
-    await db.$connect();
-    console.log('[Boot] PostgreSQL connected');
-  } catch (err) {
-    console.error('[Boot] Failed to connect to PostgreSQL:', err);
-    process.exit(1);
+    await withTimeout(db.$connect(), 500);
+    console.log('[Boot] ✓ PostgreSQL connected');
+    dbConnected = true;
+  } catch {
+    console.warn('[Boot] ⚠️ PostgreSQL is offline (Run `docker-compose up -d` to start Postgres + Redis).');
   }
 
-  // 2. Verify Redis connection
+  // 2. Check Redis (with 500ms fast timeout)
   try {
     const redis = getRedis();
-    await redis.ping();
-    console.log('[Boot] Redis connected');
-  } catch (err) {
-    console.error('[Boot] Failed to connect to Redis:', err);
-    process.exit(1);
+    await withTimeout(redis.ping(), 500);
+    console.log('[Boot] ✓ Redis connected');
+    redisConnected = true;
+  } catch {
+    console.warn('[Boot] ⚠️ Redis is offline.');
   }
 
-  // 3. Ensure BullMQ queue is ready
-  getEmailQueue();
+  if (dbConnected && redisConnected) {
+    try {
+      getEmailQueue();
+      await ensureDefaultSender();
+      startEmailWorker();
+      await reconcilePendingEmails();
+      console.log('[Boot] ✓ BullMQ Queue & Worker operational');
+    } catch (err) {
+      console.warn('[Boot] ⚠️ Queue init warning:', err instanceof Error ? err.message : err);
+    }
+  } else {
+    console.log('[Boot] 💡 Backend running in Dev Standby mode. Start Docker Desktop (`docker-compose up -d`) to enable full BullMQ persistent scheduling.');
+  }
 
-  // 4. Ensure a default sender exists (creates Ethereal account if needed)
-  await ensureDefaultSender();
-
-  // 5. Start the BullMQ worker
-  startEmailWorker();
-
-  // 6. ─ RECONCILIATION ─────────────────────────────────────────────────────
-  // Re-enqueue any PENDING emails whose BullMQ jobs are missing.
-  // This runs on every boot and is idempotent — safe to call multiple times.
-  // Protects against Redis data loss (e.g. Redis FLUSHALL between restarts).
-  await reconcilePendingEmails();
-
-  // 7. Start HTTP server
+  // 3. Start HTTP server
   const server = app.listen(config.port, () => {
-    console.log(`[Boot] Server listening on http://localhost:${config.port}`);
-    console.log(`[Boot] Health check: http://localhost:${config.port}/api/health`);
+    console.log(`[Boot] 🚀 Server listening on http://localhost:${config.port}`);
+    console.log(`[Boot] 🏥 Health check: http://localhost:${config.port}/api/health`);
   });
 
   // ── Graceful shutdown ──────────────────────────────────────────────────────
   async function shutdown(signal: string) {
     console.log(`\n[Shutdown] Received ${signal} — shutting down gracefully...`);
-
     server.close(async () => {
-      try {
-        await db.$disconnect();
-        console.log('[Shutdown] PostgreSQL disconnected');
-      } catch {}
-
-      try {
-        const redis = getRedis();
-        await redis.quit();
-        console.log('[Shutdown] Redis disconnected');
-      } catch {}
-
+      if (dbConnected) {
+        try { await db.$disconnect(); } catch {}
+      }
+      if (redisConnected) {
+        try { const redis = getRedis(); await redis.quit(); } catch {}
+      }
       console.log('[Shutdown] Done');
       process.exit(0);
     });
@@ -123,6 +126,5 @@ async function boot() {
 }
 
 boot().catch((err) => {
-  console.error('[Boot] Fatal error:', err);
-  process.exit(1);
+  console.error('[Boot] Fatal boot error:', err);
 });
