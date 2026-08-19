@@ -4,7 +4,7 @@ services:
     name: reachinbox-backend
     env: node
     rootDir: backend
-    buildCommand: npm install && npm run build && npx prisma db push
+    buildCommand: npm install && npm run build && npm run db:push
     startCommand: npm start
     envVars:
       - key: NODE_ENV

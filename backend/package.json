@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
-    "build": "tsc",
+    "build": "prisma generate && tsc",
     "start": "node dist/index.js",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
@@ -25,6 +25,7 @@
     "morgan": "^1.10.0",
     "nodemailer": "^6.9.14",
     "papaparse": "^5.4.1",
+    "prisma": "^5.14.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
@@ -35,7 +36,6 @@
     "@types/node": "^20.14.10",
     "@types/nodemailer": "^6.4.15",
     "@types/papaparse": "^5.3.14",
-    "prisma": "^5.14.0",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.5.3"

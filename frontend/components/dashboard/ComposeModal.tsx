@@ -101,7 +101,7 @@ export function ComposeModal({ isOpen, onClose, onSuccess }: ComposeModalProps) 
         }
       })
       .catch(() => {});
-  }, [isOpen]);
+  }, [isOpen, selectedSenderId]);
 
   // Reset state on close
   useEffect(() => {
